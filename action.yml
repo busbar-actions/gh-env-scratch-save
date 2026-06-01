@@ -1,0 +1,127 @@
+name: 'Busbar — gh-env-scratch-save'
+description: 'Create or update a GitHub Environment and store scratch-org credentials from sf-org-create there.'
+author: 'Busbar'
+
+inputs:
+  credentials-path:
+    description: 'Path to the JSON file written by sf-org-create.'
+    required: false
+    default: '.busbar/scratch-credentials.json'
+  environment-name:
+    description: 'GitHub Environment name. Defaults to the stable named slot `scratch`.'
+    required: false
+    default: 'scratch'
+  repository:
+    description: 'Target repository in owner/repo form. Empty = current repository.'
+    required: false
+    default: ''
+  github-token:
+    description: 'GitHub token with permission to create environments and write environment secrets. Optional when using GitHub App credentials.'
+    required: false
+    default: ''
+  github-app-id:
+    description: 'GitHub App id used to mint an installation token for the target repository.'
+    required: false
+    default: ''
+  github-app-private-key:
+    description: 'GitHub App private key PEM used to mint an installation token.'
+    required: false
+    default: ''
+  version:
+    description: 'Release tag of the gh-env-scratch-save binary.'
+    required: false
+    default: 'latest'
+  binary-repo:
+    description: 'GitHub repo hosting prebuilt binary releases.'
+    required: false
+    default: 'busbar-actions/actions-dist'
+
+outputs:
+  environment-name:
+    description: 'The GitHub Environment name that was created/populated.'
+    value: ${{ steps.save.outputs.environment_name }}
+  repository:
+    description: 'The repository that received the environment.'
+    value: ${{ steps.save.outputs.repository }}
+  scratch-org-id:
+    description: 'The scratch org id persisted into the environment.'
+    value: ${{ steps.save.outputs.scratch_org_id }}
+  scratch-org-info-id:
+    description: 'The ScratchOrgInfo id persisted into the environment.'
+    value: ${{ steps.save.outputs.scratch_org_info_id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve release tag
+      id: tag
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "${{ inputs.version }}" == "latest" ]]; then
+          tag=$(gh release view --repo "${{ inputs.binary-repo }}" --json tagName -q .tagName)
+        else
+          tag="${{ inputs.version }}"
+        fi
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Resolve binary asset name
+      id: asset
+      shell: bash
+      run: |
+        case "${{ runner.os }}-${{ runner.arch }}" in
+          Linux-X64)   name="gh-env-scratch-save-x86_64-unknown-linux-gnu" ;;
+          Linux-ARM64) name="gh-env-scratch-save-aarch64-unknown-linux-gnu" ;;
+          macOS-X64)   name="gh-env-scratch-save-x86_64-apple-darwin" ;;
+          macOS-ARM64) name="gh-env-scratch-save-aarch64-apple-darwin" ;;
+          Windows-X64) name="gh-env-scratch-save-x86_64-pc-windows-msvc.exe" ;;
+          *) echo "Unsupported runner: ${{ runner.os }}-${{ runner.arch }}" >&2; exit 1 ;;
+        esac
+        echo "name=$name" >> "$GITHUB_OUTPUT"
+
+    - name: Download gh-env-scratch-save binary
+      shell: bash
+      run: |
+        set -euo pipefail
+        bin_dir="${RUNNER_TEMP}/gh-env-scratch-save"
+        mkdir -p "$bin_dir"
+        gh release download "${{ steps.tag.outputs.tag }}" \
+          --repo "${{ inputs.binary-repo }}" \
+          --pattern "${{ steps.asset.outputs.name }}" \
+          --dir "$bin_dir"
+        bin_path="$bin_dir/${{ steps.asset.outputs.name }}"
+        chmod +x "$bin_path"
+        echo "$bin_dir" >> "$GITHUB_PATH"
+        if [[ "$bin_path" != "$bin_dir/gh-env-scratch-save" && "$bin_path" != "$bin_dir/gh-env-scratch-save.exe" ]]; then
+          ext=""
+          [[ "${{ runner.os }}" == "Windows" ]] && ext=".exe"
+          ln -sf "$bin_path" "$bin_dir/gh-env-scratch-save$ext"
+        fi
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Save scratch org to GitHub Environment
+      id: save
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        GH_APP_ID: ${{ inputs.github-app-id }}
+        GH_APP_PRIVATE_KEY: ${{ inputs.github-app-private-key }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        args=(--credentials-path "${{ inputs.credentials-path }}")
+
+        repo="${{ inputs.repository }}"
+        if [[ -n "$repo" ]]; then
+          args+=(--repository "$repo")
+        fi
+
+        env_name="${{ inputs.environment-name }}"
+        if [[ -n "$env_name" ]]; then
+          args+=(--environment-name "$env_name")
+        fi
+
+        gh-env-scratch-save "${args[@]}"
