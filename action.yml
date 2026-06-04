@@ -37,16 +37,16 @@ inputs:
     default: 'busbar-actions/actions-dist'
 
 outputs:
-  environment-name:
+  environment_name:
     description: 'The GitHub Environment name that was created/populated.'
     value: ${{ steps.save.outputs.environment_name }}
   repository:
     description: 'The repository that received the environment.'
     value: ${{ steps.save.outputs.repository }}
-  scratch-org-id:
+  scratch_org_id:
     description: 'The scratch org id persisted into the environment.'
     value: ${{ steps.save.outputs.scratch_org_id }}
-  scratch-org-info-id:
+  scratch_org_info_id:
     description: 'The ScratchOrgInfo id persisted into the environment.'
     value: ${{ steps.save.outputs.scratch_org_info_id }}
 
