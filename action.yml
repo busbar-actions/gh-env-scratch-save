@@ -54,14 +54,14 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install the gh-env-scratch-save binary from actions-dist
+    - name: Install binary
       uses: busbar-actions/setup@main
       with:
         binary: gh-env-scratch-save
         version: ${{ inputs.version }}
         binary-repo: ${{ inputs.binary-repo }}
 
-    - name: Store the sf-org-create scratch-org credentials into the "${{ inputs.environment-name }}" GitHub Environment via the Busbar GitHub App
+    - name: Save session
       id: save
       shell: bash
       env:
@@ -76,11 +76,12 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
-        echo "▶ TESTING: store the scratch-org credentials from '${INPUT_CREDENTIALS_PATH}' into the '${INPUT_ENVIRONMENT_NAME}' GitHub Environment of repo '${INPUT_REPOSITORY:-$GITHUB_REPOSITORY}'"
-        echo "  evidence — source credentials JSON the binary will read:"
+        echo "::group::Source credentials"
+        echo "Storing scratch-org credentials from '${INPUT_CREDENTIALS_PATH}' into the '${INPUT_ENVIRONMENT_NAME}' GitHub Environment of repo '${INPUT_REPOSITORY:-$GITHUB_REPOSITORY}'"
         ls -la "${INPUT_CREDENTIALS_PATH}"
+        echo "::endgroup::"
         # The binary owns the App-token mint, the create-or-update of the
         # environment, the secret writes (secrets:write), and
         # GITHUB_OUTPUT/summary/annotation. Any non-zero exit aborts the step.
         gh-env-scratch-save
-        echo "✓ RESULT: environment='${{ steps.save.outputs.environment_name }}' repository='${{ steps.save.outputs.repository }}' ScratchOrg=${{ steps.save.outputs.scratch_org_id }} ScratchOrgInfo=${{ steps.save.outputs.scratch_org_info_id }}"
+        echo "Saved: environment='${{ steps.save.outputs.environment_name }}' repository='${{ steps.save.outputs.repository }}' ScratchOrg=${{ steps.save.outputs.scratch_org_id }} ScratchOrgInfo=${{ steps.save.outputs.scratch_org_info_id }}"
